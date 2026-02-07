@@ -27,6 +27,8 @@
       --gap: 20px;
 
       --vblurY: 2.4;
+
+      --ticketAccent: rgba(255, 214, 92, .95);
     }
 
     *{ box-sizing:border-box; }
@@ -321,7 +323,7 @@
       align-items:center;
     }
 
-    button, .file-label{
+    button{
       appearance:none;
       border:1px solid rgba(255,255,255,.18);
       background: rgba(255,255,255,.10);
@@ -329,35 +331,58 @@
       padding:12px 18px;
       border-radius:14px;
       font: 800 13px/1 "Roboto Slab", serif;
-      letter-spacing:.08em;
-      text-transform:uppercase;
+      letter-spacing:.02em;
       cursor:pointer;
       box-shadow: 0 10px 25px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.10);
       transition: transform 120ms ease, background 120ms ease, opacity 120ms ease;
       user-select:none;
     }
-    button:hover, .file-label:hover{ transform: translateY(-1px); background: rgba(255,255,255,.14); }
-    button:active, .file-label:active{ transform: translateY(1px) scale(.99); }
+    button:hover{ transform: translateY(-1px); background: rgba(255,255,255,.14); }
+    button:active{ transform: translateY(1px) scale(.99); }
     button:disabled{
       opacity:.55;
       cursor:not-allowed;
       transform:none;
     }
-    input[type="file"]{ display:none; }
 
-    .result{
+    .winnerDisplay{
       margin-top:14px;
+      margin-bottom:10px;
       text-align:center;
-      color:var(--muted);
-      font-weight:700;
-      letter-spacing:.03em;
+      padding:14px 16px 16px;
+      border-radius:22px;
+      background: rgba(0,0,0,.22);
+      border:1px solid rgba(255,255,255,.10);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.08);
+      opacity: 1;
+      transform: translateY(0);
+      transition: opacity 180ms ease, transform 180ms ease;
     }
-    .winner{
-      color: rgba(255,255,255,.95);
+    .winnerDisplay.hidden{
+      opacity:0;
+      transform: translateY(-6px);
+      pointer-events:none;
+    }
+    .winnerPrizeTitle{
+      font-weight:900;
+      font-size: clamp(28px, 3.0vw, 46px);
+      line-height:1.14;
+      color: rgba(255,255,255,.97);
+      margin: 0 auto;
+      max-width: 860px;
+      word-break: break-word;
       text-shadow:
-        0 0 18px rgba(255,220,120,.25),
-        0 0 40px rgba(255,120,220,.18),
-        0 0 60px rgba(90,240,255,.14);
+        0 0 18px rgba(255,220,120,.22),
+        0 0 42px rgba(255,120,220,.16),
+        0 0 70px rgba(90,240,255,.12);
+    }
+    .winnerPrizeCompany{
+      margin-top:14px;
+      font-size: clamp(16px, 1.6vw, 22px);
+      font-weight:800;
+      color: rgba(255,255,255,.80);
+      letter-spacing:.02em;
+      word-break: break-word;
     }
 
     /* Sidebar */
@@ -373,8 +398,7 @@
       margin:0;
       font-size:16px;
       font-weight:800;
-      letter-spacing:.08em;
-      text-transform:uppercase;
+      letter-spacing:.06em;
     }
     .meta{
       display:flex;
@@ -387,14 +411,14 @@
       color:var(--muted);
       font-weight:800;
       font-size:12px;
-      letter-spacing:.06em;
+      letter-spacing:.02em;
     }
 
     .winners{
       display:flex;
       flex-direction:column;
       gap:10px;
-      max-height: calc(100vh - 180px);
+      max-height: calc(100vh - 210px);
       overflow:auto;
       padding-right:4px;
     }
@@ -405,26 +429,24 @@
       border:1px solid rgba(255,255,255,.10);
       box-shadow: inset 0 1px 0 rgba(255,255,255,.08);
     }
-    .winner-card .ticket{
-      font-weight:900;
-      letter-spacing:.12em;
-      text-transform:uppercase;
-      margin-bottom:6px;
-      font-size:14px;
-    }
 
-    /* Long titles: wrap + clamp to keep cards tidy (adjust -webkit-line-clamp if needed) */
-    .winner-card .prize{
-      font-weight:700;
+    .winner-card .line1{
+      font-weight:900;
       font-size:13px;
-      line-height:1.28;
+      line-height:1.25;
       color: rgba(255,255,255,.92);
       display:-webkit-box;
       -webkit-box-orient: vertical;
-      -webkit-line-clamp: 3;     /* show up to 3 lines */
+      -webkit-line-clamp: 2;
       overflow:hidden;
       word-break: break-word;
     }
+    .winner-card .ticketTag{
+      color: var(--ticketAccent);
+      letter-spacing:.10em;
+      text-shadow: 0 0 14px rgba(255,210,90,.18);
+    }
+
     .winner-card .company{
       margin-top:7px;
       font-size:12px;
@@ -435,21 +457,16 @@
 
     .sidebar-actions{
       display:flex;
+      flex-direction:column;
       gap:10px;
       margin-top:10px;
     }
     .sidebar-actions button{
       width:100%;
-      padding:10px 12px;
+      padding:11px 12px;
       font-size:12px;
-      letter-spacing:.08em;
-    }
-
-    .winners::-webkit-scrollbar{ width:10px; }
-    .winners::-webkit-scrollbar-thumb{
-      background: rgba(255,255,255,.12);
-      border-radius:10px;
-      border:2px solid rgba(0,0,0,.25);
+      letter-spacing:.02em;
+      text-align:center;
     }
 
     .notice{
@@ -458,6 +475,13 @@
       color: var(--muted);
       letter-spacing:.02em;
       line-height:1.35;
+    }
+
+    .winners::-webkit-scrollbar{ width:10px; }
+    .winners::-webkit-scrollbar-thumb{
+      background: rgba(255,255,255,.12);
+      border-radius:10px;
+      border:2px solid rgba(0,0,0,.25);
     }
 
     @media (max-width: 980px){
@@ -471,7 +495,6 @@
 </head>
 <body>
 
-  <!-- SVG filter for vertical-only blur -->
   <svg width="0" height="0" style="position:absolute">
     <filter id="vblur">
       <feGaussianBlur in="SourceGraphic" stdDeviation="0 2.4" />
@@ -510,16 +533,14 @@
           </div>
         </div>
 
-        <div class="controls">
-          <button id="pickBtn">Κλήρωση νικητή</button>
-
-          <label class="file-label" for="csvInput">Φόρτωση δώρων (CSV)</label>
-          <input id="csvInput" type="file" accept=".csv,text/csv" />
-
-          <button id="exportBtn">Εξαγωγή νικητών (CSV)</button>
+        <div class="winnerDisplay hidden" id="winnerDisplay" aria-live="polite">
+          <div class="winnerPrizeTitle" id="winnerPrizeTitle">—</div>
+          <div class="winnerPrizeCompany" id="winnerPrizeCompany">—</div>
         </div>
 
-        <div class="result" id="result">—</div>
+        <div class="controls">
+          <button id="pickBtn">Κλήρωση νικητή</button>
+        </div>
       </div>
     </div>
 
@@ -537,11 +558,12 @@
         <div class="winners" id="winnersList" aria-live="polite"></div>
 
         <div class="sidebar-actions">
+          <button id="exportBtn">Εξαγωγή νικητών (CSV)</button>
           <button id="resetBtn">Επαναφορά</button>
         </div>
 
         <div class="notice" id="csvStatus">
-          Φόρτωσε ένα CSV με στήλες <b>title</b>, <b>company</b> για να μοιράζονται τα δώρα με τη σειρά.
+          Φόρτωση δώρων…
         </div>
       </div>
     </aside>
@@ -551,18 +573,17 @@
 
   <script>
     // -----------------------------
-    // PRIZES (will be replaced by CSV)
+    // AUTO-LOAD CSV (GitHub Pages)
+    // Put "prizes.csv" next to index.html in the repo root.
     // -----------------------------
+    const PRIZES_CSV_URL = "./prizes.csv";
+
+    // Fallback prizes (only used if CSV fails to load)
     let prizes = [
-      { title: "Δώρο 1 (demo)", company: "Εταιρεία Α" },
-      { title: "Δώρο 2 (demo)", company: "Εταιρεία Β" },
-      { title: "Δώρο 3 (demo)", company: "Εταιρεία Γ" },
+      { title: "Δώρο 1 (fallback)", company: "—" }
     ];
 
-    // -----------------------------
-    // CONFIG
-    // -----------------------------
-    const SYMBOLS_GREEK_10 = "ΑΒΓΔΕΖΗΘΙΚ".split(""); // batches
+    const SYMBOLS_GREEK_10 = "ΑΒΓΔΕΖΗΘΙΚ".split("");
     const DIGITS = "0123456789".split("");
 
     const reels = [
@@ -584,28 +605,23 @@
 
     const MAX_UNIQUE_TICKETS = SYMBOLS_GREEK_10.length * 100;
 
-    // -----------------------------
-    // STATE
-    // -----------------------------
     const usedTickets = new Set();
-    const winners = []; // newest first: {ticket, prizeTitle, company, drawnAtISO, prizeIndex}
+    const winners = [];
     let prizeIndex = 0;
 
-    // UI
     const pickBtn = document.querySelector("#pickBtn");
     const resetBtn = document.querySelector("#resetBtn");
     const exportBtn = document.querySelector("#exportBtn");
-    const csvInput = document.querySelector("#csvInput");
 
     const winnersList = document.querySelector("#winnersList");
     const countEl = document.querySelector("#count");
     const prizeCountEl = document.querySelector("#prizeCount");
-    const resultEl = document.querySelector("#result");
     const csvStatus = document.querySelector("#csvStatus");
 
-    // -----------------------------
-    // STRIPS
-    // -----------------------------
+    const winnerDisplay = document.querySelector("#winnerDisplay");
+    const winnerPrizeTitleEl = document.querySelector("#winnerPrizeTitle");
+    const winnerPrizeCompanyEl = document.querySelector("#winnerPrizeCompany");
+
     function buildStrip(reel){
       const strip = reel.el.querySelector(".strip");
       strip.innerHTML = "";
@@ -640,9 +656,22 @@
       return idx;
     }
 
-    // -----------------------------
-    // FREE SPIN
-    // -----------------------------
+    function escapeHtml(s){
+      return String(s)
+        .replaceAll("&","&amp;")
+        .replaceAll("<","&lt;")
+        .replaceAll(">","&gt;")
+        .replaceAll('"',"&quot;")
+        .replaceAll("'","&#039;");
+    }
+
+    function hideWinnerDisplay(){ winnerDisplay.classList.add("hidden"); }
+    function showWinnerDisplay({ prizeTitle, company }){
+      winnerPrizeTitleEl.textContent = prizeTitle;
+      winnerPrizeCompanyEl.textContent = company;
+      winnerDisplay.classList.remove("hidden");
+    }
+
     let spinning = false;
     let pickLocked = false;
 
@@ -726,9 +755,6 @@
       });
     }
 
-    // -----------------------------
-    // CONFETTI
-    // -----------------------------
     function vegasConfetti(){
       const myConfetti = confetti.create(undefined, { resize: true, useWorker: true });
       const end = Date.now() + 900;
@@ -764,26 +790,15 @@
       }, 220);
     }
 
-    // -----------------------------
-    // WINNERS UI
-    // -----------------------------
-    function escapeHtml(s){
-      return String(s)
-        .replaceAll("&","&amp;")
-        .replaceAll("<","&lt;")
-        .replaceAll(">","&gt;")
-        .replaceAll('"',"&quot;")
-        .replaceAll("'","&#039;");
-    }
-
     function renderWinners(){
       countEl.textContent = String(winners.length);
       prizeCountEl.textContent = String(prizes.length);
 
       winnersList.innerHTML = winners.map(w => `
         <div class="winner-card">
-          <div class="ticket">${escapeHtml(w.ticket)}</div>
-          <div class="prize" title="${escapeHtml(w.prizeTitle)}">${escapeHtml(w.prizeTitle)}</div>
+          <div class="line1" title="${escapeHtml(w.ticket + ': ' + w.prizeTitle)}">
+            <span class="ticketTag">${escapeHtml(w.ticket)}</span><span>: </span><span>${escapeHtml(w.prizeTitle)}</span>
+          </div>
           <div class="company" title="${escapeHtml(w.company)}">${escapeHtml(w.company)}</div>
         </div>
       `).join("");
@@ -800,9 +815,6 @@
       renderWinners();
     }
 
-    // -----------------------------
-    // PRIZE SELECTION
-    // -----------------------------
     function getNextPrize(){
       if (prizeIndex >= prizes.length){
         return { title: "Δώρο (χωρίς καταχώρηση)", company: "—", idx: prizeIndex };
@@ -813,9 +825,6 @@
       return { title: p.title, company: p.company, idx };
     }
 
-    // -----------------------------
-    // UNIQUE TICKETS
-    // -----------------------------
     function pad2(n){ return String(n).padStart(2, "0"); }
     function ticketFromParts(letter, d1, d2){ return `${letter}${d1}${d2}`; }
 
@@ -845,26 +854,28 @@
       return null;
     }
 
-    // -----------------------------
-    // PICK FLOW
-    // -----------------------------
+    function setSidebarEnabled(enabled){
+      exportBtn.disabled = !enabled;
+      resetBtn.disabled = !enabled;
+    }
+
     function pickWinner(){
       if (pickLocked) return;
 
       if (usedTickets.size >= MAX_UNIQUE_TICKETS){
-        resultEl.innerHTML = `<span class="winner">Τέλος!</span> Δεν υπάρχουν άλλα διαθέσιμα εισιτήρια.`;
+        showWinnerDisplay({ prizeTitle: "Δεν υπάρχουν άλλα διαθέσιμα εισιτήρια.", company: "" });
         return;
       }
       if (prizeIndex >= prizes.length){
-        resultEl.innerHTML = `<span class="winner">Τέλος!</span> Δεν υπάρχουν άλλα διαθέσιμα δώρα.`;
+        showWinnerDisplay({ prizeTitle: "Δεν υπάρχουν άλλα διαθέσιμα δώρα.", company: "" });
         return;
       }
 
       pickLocked = true;
       pickBtn.disabled = true;
-      resetBtn.disabled = true;
-      exportBtn.disabled = true;
+      setSidebarEnabled(false);
 
+      hideWinnerDisplay();
       startSpin();
 
       const finalParts = pickUniqueTicket();
@@ -872,9 +883,8 @@
         spinning = false;
         pickLocked = false;
         pickBtn.disabled = false;
-        resetBtn.disabled = false;
-        exportBtn.disabled = false;
-        resultEl.innerHTML = `<span class="winner">Τέλος!</span> Δεν υπάρχουν άλλα διαθέσιμα εισιτήρια.`;
+        setSidebarEnabled(true);
+        showWinnerDisplay({ prizeTitle: "Δεν υπάρχουν άλλα διαθέσιμα εισιτήρια.", company: "" });
         return;
       }
 
@@ -892,36 +902,32 @@
             prizeIdx: prize.idx
           });
 
-          resultEl.innerHTML =
-            `Νικητήριο εισιτήριο: <span class="winner">${escapeHtml(finalTicket)}</span><br>` +
-            `<span class="winner">${escapeHtml(prize.title)}</span> — ${escapeHtml(prize.company)}`;
+          showWinnerDisplay({
+            prizeTitle: prize.title,
+            company: prize.company
+          });
 
           vegasConfetti();
 
           pickLocked = false;
           pickBtn.disabled = false;
-          resetBtn.disabled = false;
-          exportBtn.disabled = false;
+          setSidebarEnabled(true);
         });
       }, spinTimeBeforeStop);
     }
 
-    // -----------------------------
-    // RESET
-    // -----------------------------
     function resetAll(){
       if (pickLocked) return;
       usedTickets.clear();
       winners.length = 0;
       prizeIndex = 0;
       renderWinners();
-      resultEl.textContent = "—";
+      hideWinnerDisplay();
     }
 
     // -----------------------------
-    // CSV IMPORT
+    // CSV parsing + auto-load
     // -----------------------------
-    // Minimal RFC4180-ish parser (handles quotes, commas, CRLF)
     function parseCSV(text){
       const rows = [];
       let row = [];
@@ -941,26 +947,21 @@
           else if (c === ","){ row.push(cur); cur = ""; }
           else if (c === "\n"){
             row.push(cur); cur = "";
-            // trim trailing \r
-            if (row.length === 1 && row[0] === "") { row = []; continue; }
+            if (row.length === 1 && row[0].trim() === "") { row = []; continue; }
             rows.push(row.map(v => v.replace(/\r$/, "")));
             row = [];
           } else { cur += c; }
         }
       }
-      // last cell
       row.push(cur);
-      if (row.some(v => v !== "")) rows.push(row.map(v => v.replace(/\r$/, "")));
+      if (row.some(v => v.trim() !== "")) rows.push(row.map(v => v.replace(/\r$/, "")));
       return rows;
     }
 
-    function normalizeKey(k){
-      return String(k || "").trim().toLowerCase();
-    }
+    function normalizeKey(k){ return String(k || "").trim().toLowerCase(); }
 
     function guessColumns(headers){
       const h = headers.map(normalizeKey);
-
       const titleCandidates = ["title","prize","gift","δώρο","δωρο","name","prize_title","gift_title"];
       const companyCandidates = ["company","sponsor","provider","supplier","εταιρεία","εταιρεια","χορηγός","χορηγος"];
 
@@ -972,70 +973,54 @@
         return -1;
       };
 
-      return {
-        titleIdx: findIndex(titleCandidates),
-        companyIdx: findIndex(companyCandidates)
-      };
+      return { titleIdx: findIndex(titleCandidates), companyIdx: findIndex(companyCandidates) };
     }
 
-    async function handleCSVFile(file){
-      const text = await file.text();
+    function loadPrizesFromCSVText(text){
       const rows = parseCSV(text);
-
-      if (rows.length < 2){
-        csvStatus.textContent = "Το CSV δεν έχει αρκετές γραμμές.";
-        return;
-      }
+      if (rows.length < 2) throw new Error("CSV has no data rows.");
 
       const headers = rows[0];
       const { titleIdx, companyIdx } = guessColumns(headers);
-
-      if (titleIdx === -1){
-        csvStatus.innerHTML = "Δεν βρήκα στήλη για τίτλο δώρου. Προτείνεται header <b>title</b>, <b>company</b>.";
-        return;
-      }
+      if (titleIdx === -1) throw new Error("No title column found. Expected header 'title'.");
 
       const parsed = [];
       for (let r = 1; r < rows.length; r++){
         const cols = rows[r];
         const title = (cols[titleIdx] ?? "").trim();
         const company = (companyIdx !== -1 ? (cols[companyIdx] ?? "").trim() : "").trim();
-
         if (!title) continue;
 
         parsed.push({
           title: title.slice(0, 200),
-          company: company.slice(0, 80) || "—"
+          company: (company.slice(0, 80) || "—")
         });
       }
 
-      if (!parsed.length){
-        csvStatus.textContent = "Δεν βρέθηκαν έγκυρα δώρα στο CSV.";
-        return;
-      }
-
-      prizes = parsed;
-      prizeIndex = 0;
-
-      csvStatus.innerHTML = `Φορτώθηκαν <b>${parsed.length}</b> δώρα. Θα δοθούν με τη σειρά του CSV.`;
-      renderWinners();
+      if (!parsed.length) throw new Error("No valid prizes parsed.");
+      return parsed;
     }
 
-    csvInput.addEventListener("change", async (e) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
+    async function autoLoadCSV(){
       try{
-        await handleCSVFile(file);
-        csvInput.value = "";
+        const res = await fetch(PRIZES_CSV_URL, { cache: "no-store" });
+        if (!res.ok) throw new Error(`HTTP ${res.status} when fetching ${PRIZES_CSV_URL}`);
+        const text = await res.text();
+
+        prizes = loadPrizesFromCSVText(text);
+        prizeIndex = 0;
+
+        csvStatus.innerHTML = `Φορτώθηκαν <b>${prizes.length}</b> δώρα από prizes.csv.`;
+        renderWinners();
       } catch (err){
         console.error(err);
-        csvStatus.textContent = "Σφάλμα κατά τη φόρτωση CSV.";
+        csvStatus.textContent = "Αποτυχία φόρτωσης prizes.csv. Έλεγξε ότι υπάρχει στο ίδιο folder με το index.html.";
+        // keep fallback prizes
+        renderWinners();
       }
-    });
+    }
 
-    // -----------------------------
-    // EXPORT WINNERS CSV
-    // -----------------------------
+    // Export winners CSV
     function toCSVCell(value){
       const s = String(value ?? "");
       if (/[",\n\r]/.test(s)) return `"${s.replaceAll('"','""')}"`;
@@ -1044,13 +1029,11 @@
 
     function exportWinnersCSV(){
       if (!winners.length){
-        resultEl.textContent = "Δεν υπάρχουν νικητές για εξαγωγή.";
+        csvStatus.textContent = "Δεν υπάρχουν νικητές για εξαγωγή.";
         return;
       }
 
-      // newest-first in UI; export oldest-first is often easier for processing
       const ordered = [...winners].reverse();
-
       const header = ["ticket","prize_title","company","prize_index","drawn_at_iso"];
       const lines = [header.join(",")];
 
@@ -1078,9 +1061,7 @@
       URL.revokeObjectURL(url);
     }
 
-    // -----------------------------
     // EVENTS
-    // -----------------------------
     pickBtn.addEventListener("click", pickWinner);
     resetBtn.addEventListener("click", resetAll);
     exportBtn.addEventListener("click", exportWinnersCSV);
@@ -1101,7 +1082,13 @@
       reel.posPx = (i * 3) * cellH;
       setTranslatePx(reel.strip, reel.posPx);
     });
+
     renderWinners();
+    hideWinnerDisplay();
+    setSidebarEnabled(true);
+
+    // Auto-load prizes from CSV on startup
+    autoLoadCSV();
   </script>
 </body>
 </html>
