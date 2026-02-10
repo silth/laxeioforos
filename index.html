@@ -26,8 +26,6 @@
       --radius: 28px;
       --gap: 20px;
 
-      --vblurY: 2.4;
-
       --ticketAccent: rgba(255, 214, 92, .95);
     }
 
@@ -247,6 +245,7 @@
       user-select:none;
     }
 
+    /* vertical-only blur */
     .reel.spinning .strip{
       filter: url(#vblur) contrast(.96) saturate(1.06);
     }
@@ -418,7 +417,7 @@
       display:flex;
       flex-direction:column;
       gap:10px;
-      max-height: calc(100vh - 210px);
+      max-height: calc(100vh - 250px);
       overflow:auto;
       padding-right:4px;
     }
@@ -445,6 +444,7 @@
       color: var(--ticketAccent);
       letter-spacing:.10em;
       text-shadow: 0 0 14px rgba(255,210,90,.18);
+      white-space:nowrap;
     }
 
     .winner-card .company{
@@ -495,6 +495,7 @@
 </head>
 <body>
 
+  <!-- SVG filter for vertical-only blur -->
   <svg width="0" height="0" style="position:absolute">
     <filter id="vblur">
       <feGaussianBlur in="SourceGraphic" stdDeviation="0 2.4" />
@@ -558,13 +559,12 @@
         <div class="winners" id="winnersList" aria-live="polite"></div>
 
         <div class="sidebar-actions">
+          <button id="autoBtn">Αυτόματη κλήρωση</button>
           <button id="exportBtn">Εξαγωγή νικητών (CSV)</button>
           <button id="resetBtn">Επαναφορά</button>
         </div>
 
-        <div class="notice" id="csvStatus">
-          Φόρτωση δώρων…
-        </div>
+        <div class="notice" id="csvStatus">Φόρτωση δώρων…</div>
       </div>
     </aside>
   </div>
@@ -572,17 +572,47 @@
   <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
 
   <script>
-    // -----------------------------
-    // AUTO-LOAD CSV (GitHub Pages)
-    // Put "prizes.csv" next to index.html in the repo root.
-    // -----------------------------
+    // ============================================================
+    // 1) SOLD TICKETS PER SERIES (EDIT THIS LAST-MINUTE)
+    // Values are "how many tickets sold" in that series: 0..100.
+    // Example: "Β":45 means only Β00..Β44 exist (45 tickets).
+    // ============================================================
+    const SOLD_TICKETS_BY_SERIES = {
+      "Α": 100,
+      "Β": 100,
+      "Γ": 100,
+      "Δ": 100,
+      "Ε": 100,
+      "Ζ": 100,
+      "Η": 100,
+      "Θ": 100,
+      "Ι": 100,
+      "Κ": 100
+    };
+
+    // ============================================================
+    // CSV auto-load (GitHub Pages): keep prizes.csv next to index.html
+    // ============================================================
     const PRIZES_CSV_URL = "./prizes.csv";
 
-    // Fallback prizes (only used if CSV fails to load)
-    let prizes = [
-      { title: "Δώρο 1 (fallback)", company: "—" }
+    // ------------------------------------------------------------
+    // PRIZES DATA (populated from CSV)
+    // We keep the original CSV headers + row order,
+    // and store winner_ticket per prize row.
+    // ------------------------------------------------------------
+    let prizes = [];                 // [{title, company, row:[], winnerTicket:""}...]
+    let csvHeaders = null;           // ["title","company",...]
+    let titleIdx = -1;
+    let companyIdx = -1;
+
+    // fallback if CSV fails (kept tiny on purpose)
+    const FALLBACK_PRIZES = [
+      { title: "Δώρο (fallback)", company: "—", row: ["Δώρο (fallback)", "—"], winnerTicket: "" }
     ];
 
+    // ------------------------------------------------------------
+    // CONFIG
+    // ------------------------------------------------------------
     const SYMBOLS_GREEK_10 = "ΑΒΓΔΕΖΗΘΙΚ".split("");
     const DIGITS = "0123456789".split("");
 
@@ -594,24 +624,33 @@
 
     const cellH = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--cellH"));
 
-    const extraLoops = 10;
-    const spinDurationBase = 1550;
-    const spinStagger = 240;
-    const spinTimeBeforeStop = 950;
-
-    const STRIP_REPEAT = Math.max(18, extraLoops + 12);
+    // reel strip repeat (keep high so both normal and fast mode have room)
+    const STRIP_REPEAT = 22;
     const baseSpeedPx = 5200;
     const speedVariancePx = 450;
 
-    const MAX_UNIQUE_TICKETS = SYMBOLS_GREEK_10.length * 100;
+    // Normal vs Fast animation budgets
+    const ANIM = {
+      normal: { loops: 10, durationBase: 1550, stagger: 240, stopDelay: 950 },
+      fast:   { loops:  6, durationBase: 820,  stagger: 120, stopDelay: 320 } // stays comfortably under 3s/prize
+    };
 
+    // ------------------------------------------------------------
+    // STATE
+    // ------------------------------------------------------------
     const usedTickets = new Set();
-    const winners = [];
+    const winners = []; // newest-first: {ticket, prizeIdx, drawnAtISO}
     let prizeIndex = 0;
 
+    let spinning = false;
+    let pickLocked = false;
+    let autoRunning = false;
+
+    // UI
     const pickBtn = document.querySelector("#pickBtn");
     const resetBtn = document.querySelector("#resetBtn");
     const exportBtn = document.querySelector("#exportBtn");
+    const autoBtn = document.querySelector("#autoBtn");
 
     const winnersList = document.querySelector("#winnersList");
     const countEl = document.querySelector("#count");
@@ -622,6 +661,35 @@
     const winnerPrizeTitleEl = document.querySelector("#winnerPrizeTitle");
     const winnerPrizeCompanyEl = document.querySelector("#winnerPrizeCompany");
 
+    // ------------------------------------------------------------
+    // SOLD TICKETS: derived helpers
+    // ------------------------------------------------------------
+    function clampInt(n, min, max){
+      const x = Number.isFinite(n) ? Math.floor(n) : min;
+      return Math.max(min, Math.min(max, x));
+    }
+
+    function getSeriesMax(letter){
+      const v = SOLD_TICKETS_BY_SERIES?.[letter];
+      return clampInt(v ?? 100, 0, 100);
+    }
+
+    function getTotalAvailableTickets(){
+      return SYMBOLS_GREEK_10.reduce((sum, l) => sum + getSeriesMax(l), 0);
+    }
+
+    function buildWeightedSeries(){
+      const items = [];
+      for (const l of SYMBOLS_GREEK_10){
+        const max = getSeriesMax(l);
+        if (max > 0) items.push({ letter: l, weight: max });
+      }
+      return items;
+    }
+
+    // ------------------------------------------------------------
+    // STRIPS
+    // ------------------------------------------------------------
     function buildStrip(reel){
       const strip = reel.el.querySelector(".strip");
       strip.innerHTML = "";
@@ -665,16 +733,19 @@
         .replaceAll("'","&#039;");
     }
 
+    // ------------------------------------------------------------
+    // MAIN DISPLAY
+    // ------------------------------------------------------------
     function hideWinnerDisplay(){ winnerDisplay.classList.add("hidden"); }
     function showWinnerDisplay({ prizeTitle, company }){
-      winnerPrizeTitleEl.textContent = prizeTitle;
-      winnerPrizeCompanyEl.textContent = company;
+      winnerPrizeTitleEl.textContent = prizeTitle || "—";
+      winnerPrizeCompanyEl.textContent = company || "—";
       winnerDisplay.classList.remove("hidden");
     }
 
-    let spinning = false;
-    let pickLocked = false;
-
+    // ------------------------------------------------------------
+    // SPIN
+    // ------------------------------------------------------------
     function startSpin(){
       spinning = true;
       reels.forEach((reel) => {
@@ -697,7 +768,9 @@
       });
     }
 
-    function stopAndLand(finalSymbols, onDone){
+    function stopAndLand(finalSymbols, mode, onDone){
+      const cfg = ANIM[mode] || ANIM.normal;
+
       spinning = false;
       reels.forEach(r => { if (r.raf) cancelAnimationFrame(r.raf); });
 
@@ -717,20 +790,20 @@
         let delta = symIdx - currentWithin;
         if (delta < 0) delta += reel.symbols.length;
 
-        let travelCells = (extraLoops + i * 2) * reel.symbols.length + delta;
+        let travelCells = (cfg.loops + i * 2) * reel.symbols.length + delta;
         const maxTravelCells = reel.totalCells - reel.symbols.length - 1;
         travelCells = Math.min(travelCells, maxTravelCells);
 
         const targetCell = (currentCell + travelCells) % reel.totalCells;
         const targetPx = targetCell * cellH;
 
-        const dur = spinDurationBase + i * spinStagger + (Math.random() * 160);
+        const dur = cfg.durationBase + i * cfg.stagger + (Math.random() * 120);
 
         reel.strip.style.transition = `transform ${dur}ms cubic-bezier(.08,.82,.12,1)`;
         reel.el.classList.add("spinning");
         setTranslatePx(reel.strip, targetPx);
 
-        const unblurAt = Math.max(180, dur - 320);
+        const unblurAt = Math.max(150, dur - 260);
         setTimeout(() => reel.el.classList.remove("spinning"), unblurAt);
 
         setTimeout(() => {
@@ -738,15 +811,15 @@
 
           reel.el.classList.add("flash-on");
 
-          reel.strip.style.transition = `transform 140ms ease-out`;
+          reel.strip.style.transition = `transform 120ms ease-out`;
           setTranslatePx(reel.strip, reel.posPx - 10);
 
           setTimeout(() => {
-            reel.strip.style.transition = `transform 170ms ease-in`;
+            reel.strip.style.transition = `transform 140ms ease-in`;
             setTranslatePx(reel.strip, reel.posPx);
-          }, 140);
+          }, 120);
 
-          setTimeout(() => reel.el.classList.remove("flash-on"), 260);
+          setTimeout(() => reel.el.classList.remove("flash-on"), 220);
 
           if (i === reels.length - 1 && typeof onDone === "function"){
             onDone();
@@ -755,179 +828,253 @@
       });
     }
 
-    function vegasConfetti(){
+    // ------------------------------------------------------------
+    // CONFETTI
+    // ------------------------------------------------------------
+    function vegasConfetti(isFast){
+      // keep fast mode lighter
       const myConfetti = confetti.create(undefined, { resize: true, useWorker: true });
-      const end = Date.now() + 900;
+      const end = Date.now() + (isFast ? 380 : 900);
 
       (function frame(){
         myConfetti({
-          particleCount: 4,
-          startVelocity: 55,
-          spread: 70,
-          ticks: 220,
+          particleCount: isFast ? 2 : 4,
+          startVelocity: isFast ? 44 : 55,
+          spread: 80,
+          ticks: isFast ? 170 : 220,
           origin: { x: Math.random()*0.2 + 0.4, y: 0.15 }
-        });
-
-        myConfetti({
-          particleCount: 3,
-          startVelocity: 45,
-          spread: 90,
-          ticks: 220,
-          origin: { x: Math.random()*0.6 + 0.2, y: 0.20 }
         });
 
         if (Date.now() < end) requestAnimationFrame(frame);
       })();
 
-      setTimeout(() => {
-        myConfetti({
-          particleCount: 180,
-          startVelocity: 60,
-          spread: 95,
-          ticks: 280,
-          origin: { x: 0.5, y: 0.25 }
-        });
-      }, 220);
+      if (!isFast){
+        setTimeout(() => {
+          myConfetti({
+            particleCount: 160,
+            startVelocity: 60,
+            spread: 95,
+            ticks: 280,
+            origin: { x: 0.5, y: 0.25 }
+          });
+        }, 220);
+      }
     }
 
+    // ------------------------------------------------------------
+    // WINNERS UI
+    // ------------------------------------------------------------
     function renderWinners(){
       countEl.textContent = String(winners.length);
-      prizeCountEl.textContent = String(prizes.length);
+      prizeCountEl.textContent = String(prizes.length || 0);
 
-      winnersList.innerHTML = winners.map(w => `
-        <div class="winner-card">
-          <div class="line1" title="${escapeHtml(w.ticket + ': ' + w.prizeTitle)}">
-            <span class="ticketTag">${escapeHtml(w.ticket)}</span><span>: </span><span>${escapeHtml(w.prizeTitle)}</span>
+      winnersList.innerHTML = winners.map(w => {
+        const p = prizes[w.prizeIdx];
+        const title = p?.title ?? "—";
+        const company = p?.company ?? "—";
+        return `
+          <div class="winner-card">
+            <div class="line1" title="${escapeHtml(w.ticket + ': ' + title)}">
+              <span class="ticketTag">${escapeHtml(w.ticket)}</span><span>: </span><span>${escapeHtml(title)}</span>
+            </div>
+            <div class="company" title="${escapeHtml(company)}">${escapeHtml(company)}</div>
           </div>
-          <div class="company" title="${escapeHtml(w.company)}">${escapeHtml(w.company)}</div>
-        </div>
-      `).join("");
+        `;
+      }).join("");
     }
 
-    function addWinnerToSidebar({ ticket, prizeTitle, company, prizeIdx }){
-      winners.unshift({
-        ticket,
-        prizeTitle,
-        company,
-        prizeIndex: prizeIdx,
-        drawnAtISO: new Date().toISOString()
-      });
-      renderWinners();
-    }
-
+    // ------------------------------------------------------------
+    // PRIZES
+    // ------------------------------------------------------------
     function getNextPrize(){
-      if (prizeIndex >= prizes.length){
-        return { title: "Δώρο (χωρίς καταχώρηση)", company: "—", idx: prizeIndex };
-      }
-      const p = prizes[prizeIndex];
+      if (!prizes.length || prizeIndex >= prizes.length) return null;
       const idx = prizeIndex;
       prizeIndex += 1;
-      return { title: p.title, company: p.company, idx };
+      return { idx, prize: prizes[idx] };
     }
 
+    // ------------------------------------------------------------
+    // TICKETS (respect SOLD_TICKETS_BY_SERIES)
+    // ------------------------------------------------------------
     function pad2(n){ return String(n).padStart(2, "0"); }
     function ticketFromParts(letter, d1, d2){ return `${letter}${d1}${d2}`; }
-
-    function randomTicketCandidate(){
-      const letter = SYMBOLS_GREEK_10[Math.floor(Math.random() * SYMBOLS_GREEK_10.length)];
-      const n = Math.floor(Math.random() * 100);
+    function ticketFromLetterAndNum(letter, n){
       const two = pad2(n);
       return [letter, two[0], two[1]];
     }
 
-    function pickUniqueTicket(){
-      if (usedTickets.size >= MAX_UNIQUE_TICKETS) return null;
+    function pickWeightedSeries(seriesWeighted){
+      const total = seriesWeighted.reduce((s, x) => s + x.weight, 0);
+      if (total <= 0) return null;
+      let r = Math.random() * total;
+      for (const it of seriesWeighted){
+        r -= it.weight;
+        if (r <= 0) return it.letter;
+      }
+      return seriesWeighted[seriesWeighted.length - 1]?.letter ?? null;
+    }
 
-      for (let tries = 0; tries < 2000; tries++){
-        const parts = randomTicketCandidate();
+    function pickUniqueTicket(){
+      const totalTickets = getTotalAvailableTickets();
+      if (usedTickets.size >= totalTickets) return null;
+
+      const seriesWeighted = buildWeightedSeries();
+      if (!seriesWeighted.length) return null;
+
+      // try random
+      for (let tries = 0; tries < 2500; tries++){
+        const letter = pickWeightedSeries(seriesWeighted);
+        const max = getSeriesMax(letter);
+        if (max <= 0) continue;
+
+        const n = Math.floor(Math.random() * max);
+        const parts = ticketFromLetterAndNum(letter, n);
         const t = ticketFromParts(parts[0], parts[1], parts[2]);
+
         if (!usedTickets.has(t)) return parts;
       }
 
-      for (const letter of SYMBOLS_GREEK_10){
-        for (let n = 0; n < 100; n++){
-          const two = pad2(n);
-          const t = ticketFromParts(letter, two[0], two[1]);
-          if (!usedTickets.has(t)) return [letter, two[0], two[1]];
+      // deterministic fallback
+      for (const it of seriesWeighted){
+        const letter = it.letter;
+        const max = getSeriesMax(letter);
+        for (let n = 0; n < max; n++){
+          const parts = ticketFromLetterAndNum(letter, n);
+          const t = ticketFromParts(parts[0], parts[1], parts[2]);
+          if (!usedTickets.has(t)) return parts;
         }
       }
       return null;
     }
 
-    function setSidebarEnabled(enabled){
+    // ------------------------------------------------------------
+    // PICK FLOW (single draw as Promise)
+    // ------------------------------------------------------------
+    function setAllEnabled(enabled){
+      pickBtn.disabled = !enabled;
       exportBtn.disabled = !enabled;
       resetBtn.disabled = !enabled;
+      autoBtn.disabled = !enabled;
     }
 
-    function pickWinner(){
-      if (pickLocked) return;
+    function registerWinner(ticket, prizeIdx){
+      usedTickets.add(ticket);
 
-      if (usedTickets.size >= MAX_UNIQUE_TICKETS){
-        showWinnerDisplay({ prizeTitle: "Δεν υπάρχουν άλλα διαθέσιμα εισιτήρια.", company: "" });
-        return;
-      }
-      if (prizeIndex >= prizes.length){
-        showWinnerDisplay({ prizeTitle: "Δεν υπάρχουν άλλα διαθέσιμα δώρα.", company: "" });
-        return;
-      }
+      // store winner against the prize row (for "export in original CSV order")
+      prizes[prizeIdx].winnerTicket = ticket;
 
-      pickLocked = true;
-      pickBtn.disabled = true;
-      setSidebarEnabled(false);
+      winners.unshift({
+        ticket,
+        prizeIdx,
+        drawnAtISO: new Date().toISOString()
+      });
 
-      hideWinnerDisplay();
-      startSpin();
+      renderWinners();
+    }
 
-      const finalParts = pickUniqueTicket();
-      if (!finalParts){
-        spinning = false;
-        pickLocked = false;
-        pickBtn.disabled = false;
-        setSidebarEnabled(true);
-        showWinnerDisplay({ prizeTitle: "Δεν υπάρχουν άλλα διαθέσιμα εισιτήρια.", company: "" });
-        return;
-      }
+    function pickOne({ mode = "normal" } = {}){
+      return new Promise((resolve) => {
+        if (pickLocked) return resolve({ ok:false, reason:"locked" });
 
-      const finalTicket = ticketFromParts(finalParts[0], finalParts[1], finalParts[2]);
-      const prize = getNextPrize();
+        const totalTickets = getTotalAvailableTickets();
+        if (usedTickets.size >= totalTickets){
+          showWinnerDisplay({ prizeTitle: "Δεν υπάρχουν άλλα διαθέσιμα εισιτήρια.", company: "" });
+          return resolve({ ok:false, reason:"no_tickets" });
+        }
 
-      setTimeout(() => {
-        stopAndLand(finalParts, () => {
-          usedTickets.add(finalTicket);
+        const next = getNextPrize();
+        if (!next){
+          showWinnerDisplay({ prizeTitle: "Δεν υπάρχουν άλλα διαθέσιμα δώρα.", company: "" });
+          return resolve({ ok:false, reason:"no_prizes" });
+        }
 
-          addWinnerToSidebar({
-            ticket: finalTicket,
-            prizeTitle: prize.title,
-            company: prize.company,
-            prizeIdx: prize.idx
-          });
+        pickLocked = true;
+        setAllEnabled(false);
 
-          showWinnerDisplay({
-            prizeTitle: prize.title,
-            company: prize.company
-          });
+        hideWinnerDisplay();
+        startSpin();
 
-          vegasConfetti();
-
+        const finalParts = pickUniqueTicket();
+        if (!finalParts){
+          spinning = false;
           pickLocked = false;
-          pickBtn.disabled = false;
-          setSidebarEnabled(true);
-        });
-      }, spinTimeBeforeStop);
+          setAllEnabled(true);
+          showWinnerDisplay({ prizeTitle: "Δεν υπάρχουν άλλα διαθέσιμα εισιτήρια.", company: "" });
+          return resolve({ ok:false, reason:"no_tickets" });
+        }
+
+        const finalTicket = ticketFromParts(finalParts[0], finalParts[1], finalParts[2]);
+        const p = next.prize;
+
+        const cfg = ANIM[mode] || ANIM.normal;
+        setTimeout(() => {
+          stopAndLand(finalParts, mode, () => {
+            registerWinner(finalTicket, next.idx);
+
+            showWinnerDisplay({ prizeTitle: p.title, company: p.company });
+            vegasConfetti(mode === "fast");
+
+            pickLocked = false;
+            setAllEnabled(true);
+            resolve({ ok:true, ticket: finalTicket, prizeIdx: next.idx });
+          });
+        }, cfg.stopDelay);
+      });
     }
 
+    // ------------------------------------------------------------
+    // 2) AUTO MODE
+    // ------------------------------------------------------------
+    async function runAutoDraw(){
+      if (autoRunning || pickLocked) return;
+
+      autoRunning = true;
+      setAllEnabled(false);
+      csvStatus.textContent = "Αυτόματη κλήρωση σε εξέλιξη…";
+
+      try{
+        // keep going until prizes or tickets run out
+        while (true){
+          const res = await pickOne({ mode: "fast" });
+          if (!res.ok) break;
+
+          // optional tiny pause so people can read (still keeps <3s total)
+          await new Promise(r => setTimeout(r, 220));
+        }
+      } finally {
+        autoRunning = false;
+        setAllEnabled(true);
+
+        const remainingPrizes = Math.max(0, (prizes?.length || 0) - prizeIndex);
+        const remainingTickets = Math.max(0, getTotalAvailableTickets() - usedTickets.size);
+
+        if (remainingPrizes === 0) csvStatus.innerHTML = "Ολοκληρώθηκαν όλα τα δώρα.";
+        else if (remainingTickets === 0) csvStatus.innerHTML = "Τέλος εισιτηρίων πριν ολοκληρωθούν τα δώρα.";
+        else csvStatus.innerHTML = "Η αυτόματη κλήρωση σταμάτησε.";
+      }
+    }
+
+    // ------------------------------------------------------------
+    // RESET
+    // ------------------------------------------------------------
     function resetAll(){
-      if (pickLocked) return;
+      if (pickLocked || autoRunning) return;
+
       usedTickets.clear();
       winners.length = 0;
       prizeIndex = 0;
+
+      // clear winner tickets on prize rows
+      for (const p of prizes) p.winnerTicket = "";
+
       renderWinners();
       hideWinnerDisplay();
+      csvStatus.textContent = prizes?.length ? `Έτοιμο. Φορτωμένα δώρα: ${prizes.length}.` : "Έτοιμο.";
     }
 
-    // -----------------------------
-    // CSV parsing + auto-load
-    // -----------------------------
+    // ------------------------------------------------------------
+    // CSV parsing + auto-load (keeps original row order)
+    // ------------------------------------------------------------
     function parseCSV(text){
       const rows = [];
       let row = [];
@@ -980,20 +1127,30 @@
       const rows = parseCSV(text);
       if (rows.length < 2) throw new Error("CSV has no data rows.");
 
-      const headers = rows[0];
-      const { titleIdx, companyIdx } = guessColumns(headers);
+      csvHeaders = rows[0];
+      const guessed = guessColumns(csvHeaders);
+      titleIdx = guessed.titleIdx;
+      companyIdx = guessed.companyIdx;
+
       if (titleIdx === -1) throw new Error("No title column found. Expected header 'title'.");
 
       const parsed = [];
       for (let r = 1; r < rows.length; r++){
-        const cols = rows[r];
-        const title = (cols[titleIdx] ?? "").trim();
-        const company = (companyIdx !== -1 ? (cols[companyIdx] ?? "").trim() : "").trim();
+        const row = rows[r];
+
+        // pad row to header length so we can re-export consistently
+        while (row.length < csvHeaders.length) row.push("");
+
+        const title = (row[titleIdx] ?? "").trim();
+        const company = (companyIdx !== -1 ? (row[companyIdx] ?? "").trim() : "").trim();
+
         if (!title) continue;
 
         parsed.push({
           title: title.slice(0, 200),
-          company: (company.slice(0, 80) || "—")
+          company: (company.slice(0, 80) || "—"),
+          row: row.slice(0, csvHeaders.length),
+          winnerTicket: ""
         });
       }
 
@@ -1010,17 +1167,24 @@
         prizes = loadPrizesFromCSVText(text);
         prizeIndex = 0;
 
-        csvStatus.innerHTML = `Φορτώθηκαν <b>${prizes.length}</b> δώρα από prizes.csv.`;
+        const totalTickets = getTotalAvailableTickets();
+        csvStatus.innerHTML = `Φορτώθηκαν <b>${prizes.length}</b> δώρα. Διαθέσιμα εισιτήρια: <b>${totalTickets}</b>.`;
         renderWinners();
       } catch (err){
         console.error(err);
+        prizes = FALLBACK_PRIZES.map(p => ({...p}));
+        csvHeaders = ["title","company"];
+        titleIdx = 0;
+        companyIdx = 1;
+
         csvStatus.textContent = "Αποτυχία φόρτωσης prizes.csv. Έλεγξε ότι υπάρχει στο ίδιο folder με το index.html.";
-        // keep fallback prizes
         renderWinners();
       }
     }
 
-    // Export winners CSV
+    // ------------------------------------------------------------
+    // 3) EXPORT: keep original CSV row order, add winner_ticket last column
+    // ------------------------------------------------------------
     function toCSVCell(value){
       const s = String(value ?? "");
       if (/[",\n\r]/.test(s)) return `"${s.replaceAll('"','""')}"`;
@@ -1028,23 +1192,27 @@
     }
 
     function exportWinnersCSV(){
-      if (!winners.length){
-        csvStatus.textContent = "Δεν υπάρχουν νικητές για εξαγωγή.";
+      if (!prizes.length){
+        csvStatus.textContent = "Δεν υπάρχουν δώρα για εξαγωγή.";
         return;
       }
 
-      const ordered = [...winners].reverse();
-      const header = ["ticket","prize_title","company","prize_index","drawn_at_iso"];
-      const lines = [header.join(",")];
+      const headers = (csvHeaders && csvHeaders.length) ? csvHeaders.slice() : ["title","company"];
+      const outHeader = [...headers, "winner_ticket"];
+      const lines = [outHeader.map(toCSVCell).join(",")];
 
-      for (const w of ordered){
-        lines.push([
-          toCSVCell(w.ticket),
-          toCSVCell(w.prizeTitle),
-          toCSVCell(w.company),
-          toCSVCell(w.prizeIndex),
-          toCSVCell(w.drawnAtISO),
-        ].join(","));
+      for (const p of prizes){
+        // prefer original row so we keep original order + any extra columns
+        let row = Array.isArray(p.row) ? p.row.slice(0, headers.length) : [];
+
+        // if no original row, reconstruct minimal
+        if (row.length < headers.length){
+          row = new Array(headers.length).fill("");
+          if (titleIdx >= 0) row[titleIdx] = p.title ?? "";
+          if (companyIdx >= 0) row[companyIdx] = p.company ?? "";
+        }
+
+        lines.push([...row, p.winnerTicket || ""].map(toCSVCell).join(","));
       }
 
       const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" });
@@ -1053,23 +1221,28 @@
       const a = document.createElement("a");
       const stamp = new Date().toISOString().slice(0,19).replaceAll(":","-");
       a.href = url;
-      a.download = `winners-${stamp}.csv`;
+      a.download = `prizes-with-winners-${stamp}.csv`;
       document.body.appendChild(a);
       a.click();
       a.remove();
 
       URL.revokeObjectURL(url);
+
+      csvStatus.textContent = "Έγινε εξαγωγή CSV (σειρά όπως το αρχικό αρχείο, + winner_ticket).";
     }
 
+    // ------------------------------------------------------------
     // EVENTS
-    pickBtn.addEventListener("click", pickWinner);
+    // ------------------------------------------------------------
+    pickBtn.addEventListener("click", () => pickOne({ mode: "normal" }));
+    autoBtn.addEventListener("click", runAutoDraw);
     resetBtn.addEventListener("click", resetAll);
     exportBtn.addEventListener("click", exportWinnersCSV);
 
     window.addEventListener("keydown", (e) => {
       if (e.code === "Space" || e.code === "Enter") {
         e.preventDefault();
-        pickWinner();
+        pickOne({ mode: "normal" });
       }
       if (e.code === "Escape") {
         e.preventDefault();
@@ -1085,7 +1258,6 @@
 
     renderWinners();
     hideWinnerDisplay();
-    setSidebarEnabled(true);
 
     // Auto-load prizes from CSV on startup
     autoLoadCSV();
