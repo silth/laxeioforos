@@ -1168,7 +1168,7 @@
         prizeIndex = 0;
 
         const totalTickets = getTotalAvailableTickets();
-        csvStatus.innerHTML = `Φορτώθηκαν <b>${prizes.length}</b> δώρα. Διαθέσιμα εισιτήρια: <b>${totalTickets}</b>.`;
+        csvStatus.innerHTML = `Φορτώθηκαν <b>${prizes.length}</b> δώρα. Διαθέσιμοι λαχνοί: <b>${totalTickets}</b>.`;
         renderWinners();
       } catch (err){
         console.error(err);
